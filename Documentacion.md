@@ -1,6 +1,5 @@
-# Documentación de la Máquina Dosificadora (3 Cilindros)
+# Máquina Dosificadora (3 Cilindros)
 
-Este documento detalla el diseño, los componentes y el comportamiento del primer modelo de dosificadora automatizada ([cadesimu-dosificadora.cad](file:///d:/Work/Simu/cadesimu-dosificadora.cad)), el cual consta de 3 cilindros neumáticos y control mediante un PLC Siemens LOGO!.
 
 ---
 
