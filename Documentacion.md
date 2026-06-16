@@ -119,3 +119,72 @@ flowchart LR
     PLC --> UC6
     PLC --> UC8
 ```
+
+---
+
+## 🖥️ 6. Guía de Integración y Mapeo con PC SIMU
+
+Para que los componentes visuales de PC SIMU interactúen dinámicamente con la lógica eléctrica y neumática de CADe SIMU, se configuran las **Tablas de Intercambio de Entradas y Salidas**.
+
+### A. Tabla de Entradas en CADe SIMU (Lectura desde PC SIMU)
+Coloca el bloque de **Tabla de Entradas** en CADe SIMU y rellénalo con las siguientes direcciones físicas de entrada:
+
+| Dirección en PC SIMU | Nombre en la Tabla | Elemento Físico en PC SIMU |
+| :--- | :--- | :--- |
+| **I0.1** | `S1` | Botón Azul de Marcha (Pulsador NA). |
+| **I0.2** | `S2` | Captador/Detector `-a1` (Extensión del Cilindro A). |
+| **I0.3** | `S3` | Captador/Detector `-b1` (Extensión del Cilindro B). |
+| **I0.4** | `S4` | Captador/Detector `-c1` (Extensión del Cilindro C). |
+| **I0.5** | `S5` | Sensor de Presencia de Botella `B` (Detector inductivo o fotoeléctrico). |
+| **I0.6** | `S6` | Botón Verde de Reset de Lote (Pulsador NA). |
+
+### B. Tabla de Salidas en CADe SIMU (Escritura hacia PC SIMU)
+Coloca el bloque de **Tabla de Salidas** en CADe SIMU y rellénalo con las siguientes direcciones de salida para controlar los actuadores y luces en PC SIMU:
+
+| Dirección en PC SIMU | Nombre en la Tabla | Actuador en PC SIMU |
+| :--- | :--- | :--- |
+| **Q0.1** | `Y1` | Solenoide de expansión del **Cilindro A** (Compuerta de Entrada). |
+| **Q0.2** | `Y2` | Solenoide de expansión del **Cilindro B** (Pistón Dosificador). |
+| **Q0.3** | `Y3` | Solenoide de expansión del **Cilindro C** (Compuerta de Salida). |
+| **Q0.4** | `H` | Luz de Alerta / Lámpara indicadora de falta de envase. |
+
+---
+
+## 🚦 7. Configuración de los Objetos en PC SIMU
+
+Al diseñar el entorno en PC SIMU, haz doble clic sobre cada elemento y asígnale las direcciones descritas para asegurar el correcto acoplamiento:
+
+### 1. Los Cilindros Neumáticos (A, B y C)
+* **Cilindro A (Compuerta de Tolva):**
+  * Salida de expansión: `Q0.1` (Controles electroválvula `Y1`).
+  * Captador Contraído: Deja libre (o asígnale una dirección si usas `-a0`).
+  * Captador Expandido: `I0.2` (Representa el sensor `-a1`).
+* **Cilindro B (Émbolo Dosificador):**
+  * Salida de expansión: `Q0.2` (Controles electroválvula `Y2`).
+  * Captador Expandido: `I0.3` (Representa el sensor `-b1`).
+* **Cilindro C (Válvula de Descarga):**
+  * Salida de expansión: `Q0.3` (Controles electroválvula `Y3`).
+  * Captador Expandido: `I0.4` (Representa el sensor `-c1`).
+
+### 2. El Sensor de Presencia de Botellas (B)
+* Elige un sensor **fotoeléctrico de barrera** u **óptico**.
+* Asígnale la dirección **`I0.5`**. Ubícalo justo debajo de la boquilla de caída del producto, de modo que la botella active el sensor al detenerse allí.
+
+### 3. Los Pulsadores y Luces
+* **Botón Azul de Llenado (`S1`):** Asigna la dirección de entrada **`I0.1`**.
+* **Botón Verde de Reset (`S6`):** Asigna la dirección de entrada **`I0.6`**.
+* **Piloto Luminoso (`H`):** Asigna la dirección de salida **`Q0.4`**.
+
+---
+
+## 🔄 8. Paso a Paso para Iniciar la Simulación Conjunta
+
+Para evitar errores de sincronización y asegurar que los puertos se abran correctamente, sigue siempre este orden:
+
+1. **Paso 1:** Abre los dos programas (CADe SIMU y PC SIMU) en tu computadora.
+2. **Paso 2:** En **CADe SIMU**, pulsa el botón verde de **Play** (Simulación). El programa quedará en espera de comunicación.
+3. **Paso 3:** En **PC SIMU**, pulsa el icono de la computadora con la pantalla verde (modo simulación) y luego haz clic en el botón **Play**.
+4. **Paso 4 (Verificación):**
+   * Observa la luz de alarma `H` en PC SIMU. Como no hay ninguna botella bajo el sensor `B`, la lámpara `H` (`Q0.4`) debería encenderse inmediatamente.
+   * Coloca o desplaza una botella en la faja de PC SIMU hasta que quede frente al sensor `B`. La alarma `H` se apagará.
+   * Presiona el botón azul `S1` en PC SIMU y observa cómo se inicia la secuencia de los cilindros neumática y eléctricamente en ambos softwares al mismo tiempo.
