@@ -1,6 +1,5 @@
 # Máquina Dosificadora (3 Cilindros)
 
-
 ---
 
 ## 1. Arquitectura de Conexión Eléctrica (PLC LOGO!)
@@ -22,6 +21,8 @@ El sistema utiliza un PLC **Siemens LOGO! 24RCE** como cerebro de control. Las s
 * **Q3 (Solenoide Y3):** Envía señal para conmutar la electroválvula del **Cilindro C** (Descarga).
 * **Q4 (Lámpara H):** Activa el piloto luminoso/alarma cuando el contador de lotes alcanza el límite preestablecido.
 
+![Conexión PLC LOGO!](Images/conexion_plc_logo.png)
+
 ---
 
 ## 2. Acoplamiento de Sensores y Relés Intermedios
@@ -30,6 +31,8 @@ Para aislar y proteger las entradas del PLC, los finales de carrera neumáticos 
 * El sensor magnético de posición **-b1** activa la bobina del relé **S3**.
 * El sensor magnético de posición **-c1** activa la bobina del relé **S4**.
 * El sensor de proximidad de botella **B** activa la bobina del relé **S5**.
+
+![Sensores y Relés Auxiliares](Images/sensores_y_reles.png)
 
 ---
 
@@ -60,6 +63,8 @@ flowchart TD
 6. **Línea 6 (Reset del Lote):** Al pulsar `I6` (Pulsador verde `S6`), se envía un pulso a la entrada `R` (Reset) del contador **C1** para ponerlo a cero e iniciar un nuevo lote.
 7. **Línea 7 (Conteo de Ciclos):** Al activarse la salida `Q3` (Cilindro C en descarga), se envía un pulso a la entrada de conteo del bloque contador **C1**. Al llegar a 5, el contacto `C1` de la línea 2 se abre, bloqueando nuevas dosificaciones hasta que se presione reset.
 
+![Esquema Ladder en LOGO!](Images/logica_ladder.png)
+
 ---
 
 ## 4. Circuito Neumático de Potencia
@@ -68,6 +73,8 @@ El sistema de fuerza neumática consta de 3 secciones idénticas:
 * **Cilindros:** 3 Actuadores de doble efecto (**A**, **B**, **C**).
 * **Control de velocidad:** Cada cilindro tiene dos **válvulas reguladoras de flujo unidireccionales reguladas al 50%**, lo que garantiza movimientos suaves y controlados para evitar derrames de producto.
 * **Válvulas Distribuidoras:** Cada cilindro es gobernado por una **válvula 5/2 monoestable con retorno por muelle** activada por solenoide (`Y1`, `Y2`, `Y3`). Al desactivarse la salida del PLC, el muelle regresa automáticamente la válvula a su estado de reposo, retrayendo el cilindro de forma segura.
+
+![Actuadores Neumáticos de Potencia](Images/actuadores_neumaticos.png)
 
 ---
 
