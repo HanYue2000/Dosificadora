@@ -77,12 +77,7 @@ El entorno físico contiene los siguientes elementos gráficos, ordenados de izq
 
 ---
 
-## 4. Alineación de Variables y Simulación Sincronizada
-
-> [!NOTE]
-> Para mantener la documentación organizada y evitar duplicidad de información técnica básica, el análisis detallado del mapeo de entradas/salidas por defecto (desalineación de direcciones entre CADe SIMU y PC SIMU), las guías de corrección paso a paso y las instrucciones detalladas de simulación sincronizada se encuentran consolidados en la guía de conceptos y preparativos:
->
-> 📂 **Consulta la guía de referencia:** [Previos.md](file:///d:/Work/Simu/Previos.md#L91-L188) (Sección 5: *Mapeo de Direcciones por Defecto y Desalineación de E/S*, Sección 6: *Guía de Corrección* y Sección 7: *Instrucciones para Ejecutar la Simulación*).
+## 4. PC SIMU
 
 A grandes rasgos, recuerda verificar que:
 1. El sensor de posición de botella y el detector de nivel compartan la misma dirección lógica en la tabla de intercambio de CADe SIMU y en el objeto correspondiente de PC SIMU.
