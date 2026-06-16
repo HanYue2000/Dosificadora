@@ -32,35 +32,37 @@ El circuito se compone de elementos de entrada (sensores y pulsadores), un contr
 Representa las interacciones entre los actores (el Operario y los componentes de hardware) y las funciones principales del sistema de dosificación.
 
 ```mermaid
-  leftToRightDirection
-  actor Operario as "Operario"
-  actor PLC as "PLC LOGO!"
-  actor Actuadores as "Cilindros Neumáticos"
-  
-  rectangle "Sistema Dosificador (3 Cilindros)" {
-    usecase UC1 as "Iniciar Lote de Dosificación"
-    usecase UC2 as "Paro de Emergencia"
-    usecase UC3 as "Controlar Compuertas de Entrada/Salida"
-    usecase UC4 as "Accionar Pistón Volumétrico"
-    usecase UC5 as "Contar Ciclos (Lotes)"
-    usecase UC6 as "Activar Alarma de Lote Completo"
-  }
-  
-  Operario --> UC1
-  Operario --> UC2
-  
-  UC1 ..> UC3 : <<include>>
-  UC1 ..> UC4 : <<include>>
-  
-  UC3 --> Actuadores
-  UC4 --> Actuadores
-  
-  PLC --> UC3
-  PLC --> UC4
-  PLC --> UC5
-  PLC --> UC6
-  
-  UC5 ..> UC6 : <<trigger>>
+flowchart LR
+    %% Actors
+    Operario["🧑‍🔧 Operario"]
+    PLC["🧠 PLC LOGO!"]
+    Actuadores["🦾 Cilindros Neumáticos"]
+    
+    subgraph Sistema ["Sistema Dosificador (3 Cilindros)"]
+        UC1(["Iniciar Lote de Dosificación"])
+        UC2(["Paro de Emergencia"])
+        UC3(["Controlar Compuertas de Entrada/Salida"])
+        UC4(["Accionar Pistón Volumétrico"])
+        UC5(["Contar Ciclos (Lotes)"])
+        UC6(["Activar Alarma de Lote Completo"])
+    end
+    
+    %% Relationships
+    Operario --> UC1
+    Operario --> UC2
+    
+    UC1 -.->|include| UC3
+    UC1 -.->|include| UC4
+    
+    UC3 --> Actuadores
+    UC4 --> Actuadores
+    
+    PLC --> UC3
+    PLC --> UC4
+    PLC --> UC5
+    PLC --> UC6
+    
+    UC5 -.->|trigger| UC6
 ```
 
 ---
