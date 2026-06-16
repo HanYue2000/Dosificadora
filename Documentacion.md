@@ -19,7 +19,7 @@ El sistema utiliza un PLC **Siemens LOGO! 24RCE** como cerebro de control. Las s
 * **Q1 (Solenoide Y1):** Envía señal para conmutar la electroválvula del **Cilindro A** (Alimentación).
 * **Q2 (Solenoide Y2):** Envía señal para conmutar la electroválvula del **Cilindro B** (Pistón Dosificador).
 * **Q3 (Solenoide Y3):** Envía señal para conmutar la electroválvula del **Cilindro C** (Descarga).
-* **Q4 (Lámpara H):** Activa el piloto luminoso/alarma cuando el contador de lotes alcanza el límite preestablecido.
+* **Q4 (Lámpara H):** Activa el piloto luminoso/alarma cuando no hay botella presente en la zona de dosificación.
 
 ![Conexión PLC LOGO!](Images/conexion_plc_logo.png)
 
@@ -49,19 +49,21 @@ flowchart TD
     T3 -->|T3 Termina| Q3[Activar Q3 / Cilindro C se extiende]
     Q3 -->|Cilindro C extendido / I4| C1[Incrementar Contador C1]
     Q3 -->|I4 abre circuito| Retraccion[Retracción de cilindros y fin de ciclo]
+    I5_NC[I5 NC / Botella Ausente] --> Q4[Activar Q4 / Alarma de Falta de Envase H]
 ```
 
 ### Explicación de cada línea del programa Ladder:
-1. **Línea 1 (Inicio de Proceso):** Al pulsar `I1` (Marcha `S1`), se energiza el temporizador **T4** (Temporizador de Llenado).
+1. **Línea 1 (Inicio de Proceso):** Al pulsar `I1` (Marcha `S1`), se energiza el temporizador **T4**. Este temporizador funciona como un mantenedor temporal de ciclo (latch monoestable) que define la duración máxima del proceso.
 2. **Línea 2 (Control de Compuerta de Tolva A):** La salida `Q1` (Cilindro A) se activa si se cumplen tres condiciones simultáneamente:
    * El temporizador **T4** está activo (contacto `T4` cerrado).
    * Hay una botella detectada por el sensor `B` (contacto de entrada `I5` cerrado).
    * El contador de lotes **C1** no ha llegado a su límite de 5 ciclos (contacto normalmente cerrado `C1` cerrado).
-3. **Línea 3 (Control de Pistón Dosificador B):** Al extenderse el Cilindro A y activarse `I2` (contacto del relé `-a1`), se activa inmediatamente la salida `Q2` para extender el **Cilindro B** (inyectar producto).
+3. **Línea 3 (Control de Pistón Dosificador B):** Al extenderse el Cilindro A y activarse `I2` (contacto del relé `-a1`), se activa la salida `Q2` para extender el **Cilindro B** (inyectar producto). Esto asegura una secuencia física lógica: no se puede dosificar si la compuerta de llenado no se ha abierto completamente.
 4. **Línea 4 (Retardo de Descarga):** Cuando el Cilindro B se extiende completamente y activa `I3` (relé `-b1`), se inicia el temporizador **T3** (3.0s), siempre y cuando el Cilindro C no esté extendido (contacto normalmente cerrado `I4` cerrado).
 5. **Línea 5 (Control de Compuerta de Salida C):** Al transcurrir el tiempo de **T3**, se cierra el contacto y se activa `Q3` (Cilindro C) para abrir la compuerta de descarga inferior.
-6. **Línea 6 (Reset del Lote):** Al pulsar `I6` (Pulsador verde `S6`), se envía un pulso a la entrada `R` (Reset) del contador **C1** para ponerlo a cero e iniciar un nuevo lote.
-7. **Línea 7 (Conteo de Ciclos):** Al activarse la salida `Q3` (Cilindro C en descarga), se envía un pulso a la entrada de conteo del bloque contador **C1**. Al llegar a 5, el contacto `C1` de la línea 2 se abre, bloqueando nuevas dosificaciones hasta que se presione reset.
+6. **Línea 6 (Reset del Lote):** Al pulsar `I6` (Pulsador verde `S6`), se envía un pulso a la entrada `R` (Reset) del contador **C1** para ponerlo a cero e iniciar un nuevo lote de 5 botellas.
+7. **Línea 7 (Conteo de Ciclos y Auto-Retorno de C):** Al activarse la salida `Q3` (Cilindro C en descarga), se envía un pulso a la entrada de conteo del bloque contador **C1**. Al mismo tiempo, en cuanto el Cilindro C llega a su extensión completa y activa `I4` (`-c1`), se abre el contacto NC de `I4` de la Línea 4. Esto desenergiza a `T3`, abriendo el contacto de la Línea 5 y haciendo que el Cilindro C se retraiga de forma automática e inmediata.
+8. **Línea 8 (Alarma de Falta de Envase):** Si no hay botella en la zona de dosificación, el contacto normalmente cerrado **`I5`** permanece cerrado, lo que activa la salida **`Q4`** y enciende la lámpara de alarma **`H`** para avisar al operador.
 
 ![Esquema Ladder en LOGO!](Images/logica_ladder.png)
 
@@ -96,6 +98,7 @@ flowchart LR
         UC5(["Descargar Producto (Cilindro C)"])
         UC6(["Contar Lote y Bloquear al llegar a 5"])
         UC7(["Reiniciar Contador (S6)"])
+        UC8(["Activar Alarma de Falta de Envase (H)"])
     end
     
     %% Relationships
@@ -105,6 +108,7 @@ flowchart LR
     
     UC1 -.->|requiere| UC2
     UC2 -.->|permite| UC3
+    UC2 -.->|si no hay, activa| UC8
     UC3 --> Actuadores
     UC4 --> Actuadores
     UC5 --> Actuadores
@@ -113,4 +117,5 @@ flowchart LR
     PLC --> UC4
     PLC --> UC5
     PLC --> UC6
+    PLC --> UC8
 ```
