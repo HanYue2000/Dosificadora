@@ -4,32 +4,75 @@ Este documento detalla el diseño, los componentes y el comportamiento del prime
 
 ---
 
-## 1. Listado de Elementos del Sistema
+## 1. Arquitectura de Conexión Eléctrica (PLC LOGO!)
 
-El circuito se compone de elementos de entrada (sensores y pulsadores), un controlador lógico programable y elementos de salida (actuadores neumáticos e indicadores).
+El sistema utiliza un PLC **Siemens LOGO! 24RCE** como cerebro de control. Las señales de campo se conectan de la siguiente manera:
 
-### A. Elementos de Entrada (Captadores / Sensores)
-| Etiqueta | Tipo de Dispositivo | Canal PLC | Descripción |
-| :--- | :--- | :--- | :--- |
-| **S1** | Pulsador de Marcha (NA) | `I1` | Inicia el ciclo de dosificación. |
-| **B** | Pulsador de Emergencia/Paro (NC) | `I5` | Detiene inmediatamente la secuencia por seguridad. |
-| **-a1** | Final de carrera neumático (NA) | `I2` | Detecta la extensión completa del Cilindro A (Cámara de entrada abierta). |
-| **-b1** | Final de carrera neumático (NA) | `I3` | Detecta la extensión completa del Cilindro B (Dosificación/Pistón extendido). |
-| **-c1** | Final de carrera neumático (NA) | `I4` | Detecta la extensión completa del Cilindro C (Válvula de descarga abierta). |
+### A. Alimentación y Entradas Digitales (X10)
+* **P1 / P2:** Alimentación del PLC (Línea de corriente continua `+` y `-`).
+* **I1 (Pulsador de Marcha S1):** Conectado al pulsador azul de marcha (`S1`). Da inicio a la secuencia.
+* **I2 (Contacto S2 - Sensor -a1):** Entrada digital controlada por el relé auxiliar `S2`. Se activa cuando el Cilindro A llega a su extensión completa.
+* **I3 (Contacto S3 - Sensor -b1):** Entrada digital controlada por el relé auxiliar `S3`. Se activa cuando el Cilindro B llega a su extensión completa.
+* **I4 (Contacto S4 - Sensor -c1):** Entrada digital controlada por el relé auxiliar `S4`. Se activa cuando el Cilindro C llega a su extensión completa.
+* **I5 (Contacto S5 - Sensor de Botella B):** Entrada digital controlada por el relé auxiliar `S5`. Este relé es accionado por el sensor de proximidad inductivo/capacitivo `B` para verificar la **presencia de una botella** en la zona de llenado.
+* **I6 (Pulsador de Reset S6):** Conectado al pulsador verde de reset (`S6`). Permite reiniciar el contador de lotes `C1`.
 
-### B. Elementos de Salida (Actuadores y Alertas)
-| Etiqueta | Tipo de Dispositivo | Canal PLC | Descripción |
-| :--- | :--- | :--- | :--- |
-| **Y1** | Electroválvula (Bobina) | `Q1` | Controla el movimiento del Cilindro A (Alimentación / Compuerta superior). |
-| **Y2** | Electroválvula (Bobina) | `Q2` | Controla el movimiento del Cilindro B (Émbolo empujador / Cámara de dosificación). |
-| **Y3** | Electroválvula (Bobina) | `Q3` | Controla el movimiento del Cilindro C (Compuerta inferior / Descarga). |
-| **H** | Indicador Luminoso/Acústico | `Q4` | Alarma/Aviso que se activa al completar un lote de 5 ciclos de dosificación. |
+### B. Salidas Digitales de Relé (X11)
+* **Q1 (Solenoide Y1):** Envía señal para conmutar la electroválvula del **Cilindro A** (Alimentación).
+* **Q2 (Solenoide Y2):** Envía señal para conmutar la electroválvula del **Cilindro B** (Pistón Dosificador).
+* **Q3 (Solenoide Y3):** Envía señal para conmutar la electroválvula del **Cilindro C** (Descarga).
+* **Q4 (Lámpara H):** Activa el piloto luminoso/alarma cuando el contador de lotes alcanza el límite preestablecido.
 
 ---
 
-## 2. Diagrama de Casos de Uso (Diagrama de Uso)
+## 2. Acoplamiento de Sensores y Relés Intermedios
+Para aislar y proteger las entradas del PLC, los finales de carrera neumáticos y los sensores de proximidad no se conectan directamente al LOGO!. En su lugar, activan bobinas de relés auxiliares:
+* El sensor magnético de posición **-a1** activa la bobina del relé **S2**.
+* El sensor magnético de posición **-b1** activa la bobina del relé **S3**.
+* El sensor magnético de posición **-c1** activa la bobina del relé **S4**.
+* El sensor de proximidad de botella **B** activa la bobina del relé **S5**.
 
-Representa las interacciones entre los actores (el Operario y los componentes de hardware) y las funciones principales del sistema de dosificación.
+---
+
+## 3. Lógica de Control (Esquema Ladder)
+
+La lógica programada dentro del PLC LOGO! sigue las siguientes reglas en el diagrama Ladder:
+
+```mermaid
+flowchart TD
+    I1[Pulsar S1 / Inicio] --> T4[Temporizador T4]
+    T4 -->|T4 Activo + I5 Botella Presente + C1 Lote Incompleto| Q1[Activar Q1 / Cilindro A se extiende]
+    Q1 -->|Cilindro A extendido / I2| Q2[Activar Q2 / Cilindro B se extiende]
+    Q2 -->|Cilindro B extendido / I3 + I4 NC| T3[Temporizador T3]
+    T3 -->|T3 Termina| Q3[Activar Q3 / Cilindro C se extiende]
+    Q3 -->|Cilindro C extendido / I4| C1[Incrementar Contador C1]
+    Q3 -->|I4 abre circuito| Retraccion[Retracción de cilindros y fin de ciclo]
+```
+
+### Explicación de cada línea del programa Ladder:
+1. **Línea 1 (Inicio de Proceso):** Al pulsar `I1` (Marcha `S1`), se energiza el temporizador **T4** (Temporizador de Llenado).
+2. **Línea 2 (Control de Compuerta de Tolva A):** La salida `Q1` (Cilindro A) se activa si se cumplen tres condiciones simultáneamente:
+   * El temporizador **T4** está activo (contacto `T4` cerrado).
+   * Hay una botella detectada por el sensor `B` (contacto de entrada `I5` cerrado).
+   * El contador de lotes **C1** no ha llegado a su límite de 5 ciclos (contacto normalmente cerrado `C1` cerrado).
+3. **Línea 3 (Control de Pistón Dosificador B):** Al extenderse el Cilindro A y activarse `I2` (contacto del relé `-a1`), se activa inmediatamente la salida `Q2` para extender el **Cilindro B** (inyectar producto).
+4. **Línea 4 (Retardo de Descarga):** Cuando el Cilindro B se extiende completamente y activa `I3` (relé `-b1`), se inicia el temporizador **T3** (3.0s), siempre y cuando el Cilindro C no esté extendido (contacto normalmente cerrado `I4` cerrado).
+5. **Línea 5 (Control de Compuerta de Salida C):** Al transcurrir el tiempo de **T3**, se cierra el contacto y se activa `Q3` (Cilindro C) para abrir la compuerta de descarga inferior.
+6. **Línea 6 (Reset del Lote):** Al pulsar `I6` (Pulsador verde `S6`), se envía un pulso a la entrada `R` (Reset) del contador **C1** para ponerlo a cero e iniciar un nuevo lote.
+7. **Línea 7 (Conteo de Ciclos):** Al activarse la salida `Q3` (Cilindro C en descarga), se envía un pulso a la entrada de conteo del bloque contador **C1**. Al llegar a 5, el contacto `C1` de la línea 2 se abre, bloqueando nuevas dosificaciones hasta que se presione reset.
+
+---
+
+## 4. Circuito Neumático de Potencia
+
+El sistema de fuerza neumática consta de 3 secciones idénticas:
+* **Cilindros:** 3 Actuadores de doble efecto (**A**, **B**, **C**).
+* **Control de velocidad:** Cada cilindro tiene dos **válvulas reguladoras de flujo unidireccionales reguladas al 50%**, lo que garantiza movimientos suaves y controlados para evitar derrames de producto.
+* **Válvulas Distribuidoras:** Cada cilindro es gobernado por una **válvula 5/2 monoestable con retorno por muelle** activada por solenoide (`Y1`, `Y2`, `Y3`). Al desactivarse la salida del PLC, el muelle regresa automáticamente la válvula a su estado de reposo, retrayendo el cilindro de forma segura.
+
+---
+
+## 5. Diagrama de Casos de Uso (Visualización General)
 
 ```mermaid
 flowchart LR
@@ -37,79 +80,31 @@ flowchart LR
     Operario["🧑‍🔧 Operario"]
     PLC["🧠 PLC LOGO!"]
     Actuadores["🦾 Cilindros Neumáticos"]
+    SensorBotella["🍾 Sensor Proximidad B"]
     
     subgraph Sistema ["Sistema Dosificador (3 Cilindros)"]
-        UC1(["Iniciar Lote de Dosificación"])
-        UC2(["Paro de Emergencia"])
-        UC3(["Controlar Compuertas de Entrada/Salida"])
-        UC4(["Accionar Pistón Volumétrico"])
-        UC5(["Contar Ciclos (Lotes)"])
-        UC6(["Activar Alarma de Lote Completo"])
+        UC1(["Iniciar Ciclo (S1)"])
+        UC2(["Verificar Presencia Botella (B)"])
+        UC3(["Controlar Compuerta Entrada (Cilindro A)"])
+        UC4(["Dosificar Producto (Cilindro B)"])
+        UC5(["Descargar Producto (Cilindro C)"])
+        UC6(["Contar Lote y Bloquear al llegar a 5"])
+        UC7(["Reiniciar Contador (S6)"])
     end
     
     %% Relationships
     Operario --> UC1
-    Operario --> UC2
+    Operario --> UC7
+    SensorBotella --> UC2
     
-    UC1 -.->|include| UC3
-    UC1 -.->|include| UC4
-    
+    UC1 -.->|requiere| UC2
+    UC2 -.->|permite| UC3
     UC3 --> Actuadores
     UC4 --> Actuadores
+    UC5 --> Actuadores
     
     PLC --> UC3
     PLC --> UC4
     PLC --> UC5
     PLC --> UC6
-    
-    UC5 -.->|trigger| UC6
 ```
-
----
-
-## 3. Diagrama de Secuencia de Operación
-
-Describe el paso a paso temporal de la dosificación. Muestra cómo fluyen las señales desde que el Operario pulsa el botón de inicio hasta que se dispara la alarma al completar 5 ciclos de llenado.
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor O as Operario
-    participant A as Cilindro A (Entrada)
-    participant B as Cilindro B (Dosificador)
-    participant C as Cilindro C (Salida)
-    participant PLC as PLC LOGO!
-    participant H as Alarma H (Q4)
-
-    O->>PLC: Pulsa S1 (Inicio de ciclo)
-    PLC->>A: Activa Q1 (Y1) -> Extender Cilindro A
-    A-->>PLC: Llega al final de carrera -a1 (I2)
-    Note over PLC: Temporizador T4 (2.7 seg) en marcha
-    PLC->>B: Activa Q2 (Y2) -> Extender Cilindro B (Dosificar)
-    B-->>PLC: Llega al final de carrera -b1 (I3)
-    Note over PLC: Temporizador T3 (3.0 seg) en marcha
-    PLC->>C: Activa Q3 (Y3) -> Extender Cilindro C (Descarga)
-    C-->>PLC: Llega al final de carrera -c1 (I4)
-    Note over PLC: Contador C1 incrementa en +1
-    
-    rect rgb(240, 240, 240)
-        Note over PLC: Se repite la secuencia de ciclos 1 a 5
-    end
-
-    PLC->>H: Contador C1 alcanza 5 -> Activa Q4 (Alarma de Lote)
-    Note over H: Alarma activa (Aviso acústico/visual)
-    O->>PLC: Pulsa reset/paro para iniciar nuevo lote
-```
-
----
-
-## 4. Descripción Detallada del Ciclo de Trabajo
-
-1. **Estado de Reposo:** Todos los cilindros están retraídos (`-a0`, `-b0`, `-c0` activos). El contador `C1` está en 0.
-2. **Inicio del Proceso:** Al presionar `S1` (`I1`), el PLC activa la salida `Q1` alimentando el solenoide `Y1`. El **Cilindro A** se extiende para permitir el ingreso de material a la cámara.
-3. **Temporización de Llenado:** Al extenderse por completo y tocar `-a1` (`I2`), el PLC inicia un conteo regresivo de **2.7 segundos (T4)**. Este retardo asegura el llenado correcto de la recámara de medición.
-4. **Dosificación Volumétrica:** Transcurrido el tiempo `T4`, el PLC activa `Q2` (`Y2`). El **Cilindro B** se extiende para empujar y comprimir el volumen dosificado.
-5. **Temporización de Compresión:** Al tocar `-b1` (`I3`), comienza la segunda temporización de **3.0 segundos (T3)** para asegurar que todo el volumen ha sido desplazado correctamente.
-6. **Descarga:** Al finalizar `T3`, se activa `Q3` (`Y3`), lo que hace que el **Cilindro C** se extienda (abriendo la compuerta de descarga inferior) y vacíe el producto en la botella o recipiente.
-7. **Conteo de Ciclo:** Al completarse la extensión del Cilindro C (activando `-c1`), se envía un pulso al contador del LOGO!. Luego de descargar, los cilindros retornan a su posición inicial para iniciar la siguiente dosificación.
-8. **Alarma de Lote Completado:** Cuando el contador interno alcanza el límite de **5 ciclos**, el PLC detiene temporalmente la secuencia automática y activa la salida `Q4` (`H`) para alertar al operario que retire la bandeja de lote completo.
