@@ -1,40 +1,28 @@
-# Simulación de Dosificadoras Industriales en CADe SIMU
+# Simulación de Dosificadora Industrial de Botellas en CADe SIMU y PC SIMU
 
-Este repositorio contiene proyectos de simulación para **máquinas dosificadoras neumáticas** diseñadas en **CADe SIMU** (con lógica FBD en PLC LOGO!) y preparadas para ser vinculadas con **PC SIMU** para visualización 2D/3D interactiva.
+Este repositorio contiene los archivos y la documentación técnica para la simulación interactiva de una **máquina dosificadora de botellas con faja transportadora**. El control lógico y secuencial se realiza mediante programación Ladder en PLC, integrado dinámicamente con una interfaz física interactiva.
 
 ---
 
 ## 📂 Contenido del Proyecto
 
-* **[cadesimu-dosificadora.cad](file:///d:/Work/Simu/cadesimu-dosificadora.cad):** Simulación de dosificadora volumétrica/compuerta de **3 cilindros** con control de ciclo por lote (contador a 5 ciclos) y alarma acústica/luminosa.
-* **[cadesimu-dosificadora-2.cad](file:///d:/Work/Simu/cadesimu-dosificadora-2.cad):** Simulación avanzada de **4 cilindros** que integra la dosificación temporizada junto con el control de paso físico de los envases (tope de entrada/salida).
-* **[Documentacion.md](file:///d:/Work/Simu/Documentacion.md):** Documentación teórica completa sobre qué es una dosificadora, tipos y el flujo detallado de la simulación.
+* **[dosificadora-cadesimu.cad](dosificadora-cadesimu.cad):** Esquema de lógica de control Ladder para PLC en CADe SIMU. Configura el arranque/paro del sistema, el movimiento de la cinta transportadora, el llenado controlado, la temporización de ciclo de 7 segundos, los actuadores y las alarmas de standby.
+* **[dosificadora-pcsimu.sim]:** Interfaz visual interactiva en PC SIMU que representa el proceso real de la faja transportadora, botellas, dosificadores, sensores ópticos de presencia y nivel, y panel de control.
+* **[Documentacion.md](Documentacion.md):** Documentación técnica completa. Incluye la explicación detallada de cada línea (Rung) de lógica Ladder, diagrama de flujo del proceso, la configuración de los objetos de planta y un análisis crítico sobre la alineación de las tablas de E/S.
+* **[Previos.md](Previos.md):** Guía de saberes previos recomendados sobre electricidad industrial, neumática, control mediante PLC y técnicas de integración CADe/PC SIMU.
 
 ---
 
-## 🛠️ Tecnologías y Software Necesarios
+## 🛠️ Requisitos de Software
 
-1. **CADe SIMU (v3.0 o superior):** Para simular la lógica de control del PLC Siemens LOGO! y el circuito neumático.
-2. **PC SIMU:** Para la interfaz gráfica y visualización del proceso físico (cinta transportadora, botellas, tolvas, etc.).
-
----
-
-## 🚀 Cómo Ejecutar la Simulación
-
-### 1. Preparación en CADe SIMU
-1. Abre **CADe SIMU** e introduce la clave de acceso estándar (`4962`).
-2. Abre uno de los archivos `.cad` de este repositorio (`cadesimu-dosificadora.cad` o `cadesimu-dosificadora-2.cad`).
-3. Agrega la **Tabla de Entradas/Salidas (I/O)** si aún no está en el lienzo y mapea las variables de los finales de carrera de los cilindros y electroválvulas.
-4. Presiona el botón de **Play (Simulación)**.
-
-### 2. Vinculación con PC SIMU
-1. Abre **PC SIMU** (clave `9966`).
-2. Diseña o abre tu entorno de planta (cilindros, tolva de dosificación, y botellas).
-3. Asegúrate de que las direcciones de entradas (`I0.x`) y salidas (`Q0.x`) coincidan con las configuradas en las tablas de CADe SIMU.
-4. Presiona el botón de **Play (Simulación)** en PC SIMU.
+1. **CADe SIMU (v3.0 o superior):** Para simular y monitorear la ejecución del diagrama Ladder en el PLC.
+2. **PC SIMU:** Para simular la faja transportadora y los sensores en tiempo real.
 
 ---
 
-## 📝 Licencia
+## 🚀 Guía Rápida para Iniciar la Simulación
 
-Este proyecto es de uso libre con fines educativos y de aprendizaje en automatización industrial.
+1. **Alineación de Variables:** Asegúrate de verificar las tablas de E/S descritas en la sección 5 de [Previos.md](Previos.md) para garantizar que CADe SIMU y PC SIMU compartan las mismas direcciones físicas.
+2. **Iniciar Simulación en CADe SIMU:** Abre `dosificadora-cadesimu.cad` (clave `4962`) y presiona el botón de **Play** (Simulación).
+3. **Iniciar Simulación en PC SIMU:** Abre `dosificadora-pcsimu.sim` (clave `9966`), presiona el botón del monitor de PC (pantalla verde) y luego presiona **Play**.
+4. **Operación:** Presiona el botón de marcha en PC SIMU para arrancar la banda transportadora e iniciar el proceso automático de envasado y llenado.

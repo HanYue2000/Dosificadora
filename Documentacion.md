@@ -1,190 +1,90 @@
-# Máquina Dosificadora (3 Cilindros)
+# Máquina Dosificadora de Botellas con Banda Transportadora
 
 ---
 
-## 1. Arquitectura de Conexión Eléctrica (PLC LOGO!)
+## 1. Arquitectura del Sistema de Llenado
 
-El sistema utiliza un PLC **Siemens LOGO! 24RCE** como cerebro de control. Las señales de campo se conectan de la siguiente manera:
+El nuevo sistema de dosificación industrial automatizado simula una línea de envasado continua. El proceso consta de una **cinta transportadora** que desplaza botellas vacías hacia una **zona de dosificación**. Una vez allí, se detecta la botella, se detiene la cinta, se procede al llenado de líquido y, opcionalmente, a una fase secundaria (cincelado/tapado) antes de continuar el ciclo o detener el proceso mediante un temporizador.
 
-### A. Alimentación y Entradas Digitales (X10)
-* **P1 / P2:** Alimentación del PLC (Línea de corriente continua `+` y `-`).
-* **I1 (Pulsador de Marcha S1):** Conectado al pulsador azul de marcha (`S1`). Da inicio a la secuencia.
-* **I2 (Contacto S2 - Sensor -a1):** Entrada digital controlada por el relé auxiliar `S2`. Se activa cuando el Cilindro A llega a su extensión completa.
-* **I3 (Contacto S3 - Sensor -b1):** Entrada digital controlada por el relé auxiliar `S3`. Se activa cuando el Cilindro B llega a su extensión completa.
-* **I4 (Contacto S4 - Sensor -c1):** Entrada digital controlada por el relé auxiliar `S4`. Se activa cuando el Cilindro C llega a su extensión completa.
-* **I5 (Contacto S5 - Sensor de Botella B):** Entrada digital controlada por el relé auxiliar `S5`. Este relé es accionado por el sensor de proximidad inductivo/capacitivo `B` para verificar la **presencia de una botella** en la zona de llenado.
-* **I6 (Pulsador de Reset S6):** Conectado al pulsador verde de reset (`S6`). Permite reiniciar el contador de lotes `C1`.
-
-### B. Salidas Digitales de Relé (X11)
-* **Q1 (Solenoide Y1):** Envía señal para conmutar la electroválvula del **Cilindro A** (Alimentación).
-* **Q2 (Solenoide Y2):** Envía señal para conmutar la electroválvula del **Cilindro B** (Pistón Dosificador).
-* **Q3 (Solenoide Y3):** Envía señal para conmutar la electroválvula del **Cilindro C** (Descarga).
-* **Q4 (Lámpara H):** Activa el piloto luminoso/alarma cuando no hay botella presente en la zona de dosificación.
-
-![Conexión PLC LOGO!](Images/conexion_plc_logo.png)
+Este sistema está distribuido entre dos softwares interconectados:
+1. **CADe SIMU (dosificadora-cadesimu.cad):** Ejecuta la lógica Ladder de control lógico y de temporización del ciclo.
+2. **PC SIMU (dosificadora-pcsimu.sim):** Representa el entorno físico en 2D/3D con faja transportadora, botellas, sensores fotoeléctricos, depósitos de líquido y válvulas solenoides.
 
 ---
 
-## 2. Acoplamiento de Sensores y Relés Intermedios
-Para aislar y proteger las entradas del PLC, los finales de carrera neumáticos y los sensores de proximidad no se conectan directamente al LOGO!. En su lugar, activan bobinas de relés auxiliares:
-* El sensor magnético de posición **-a1** activa la bobina del relé **S2**.
-* El sensor magnético de posición **-b1** activa la bobina del relé **S3**.
-* El sensor magnético de posición **-c1** activa la bobina del relé **S4**.
-* El sensor de proximidad de botella **B** activa la bobina del relé **S5**.
+## 2. Lógica de Control (Esquema Ladder)
 
-![Sensores y Relés Auxiliares](Images/sensores_y_reles.png)
-
----
-
-## 3. Lógica de Control (Esquema Ladder)
-
-La lógica programada dentro del PLC LOGO! sigue las siguientes reglas en el diagrama Ladder:
+La lógica de control desarrollada en el PLC del esquema Ladder sigue un ciclo continuo controlado por autorretención (latch) y un temporizador de ciclo general.
 
 ```mermaid
 flowchart TD
-    I1[Pulsar S1 / Inicio] --> T4[Temporizador T4]
-    T4 -->|T4 Activo + I5 Botella Presente + C1 Lote Incompleto| Q1[Activar Q1 / Cilindro A se extiende]
-    Q1 -->|Cilindro A extendido / I2| Q2[Activar Q2 / Cilindro B se extiende]
-    Q2 -->|Cilindro B extendido / I3 + I4 NC| T3[Temporizador T3]
-    T3 -->|T3 Termina| Q3[Activar Q3 / Cilindro C se extiende]
-    Q3 -->|Cilindro C extendido / I4| C1[Incrementar Contador C1]
-    Q3 -->|I4 abre circuito| Retraccion[Retracción de cilindros y fin de ciclo]
-    I5_NC[I5 NC / Botella Ausente] --> Q4[Activar Q4 / Alarma de Falta de Envase H]
+    Stop[I3 NC / Pulsador Parada] --> Latch{M1 Activo?}
+    Start[I4 NO / Pulsador Marcha] --> Latch
+    Latch -->|M1 = 1| RunState[Ciclo en Marcha]
+    Latch -->|T1 Termina / Abre NC| StopCycle[Parar Ciclo / M1 = 0]
+    
+    RunState -->|M1=1 + I1 NC / Sin Botella| Conveyor[Activar Q1 / Cinta Avanza]
+    RunState -->|M1=1 + I1 NO / Botella Detectada| StopConveyor[Detener Q1 / Cinta Para]
+    
+    StopConveyor -->|I1 NO + I2 NC / Botella no Llena| Filling[Activar Q3 / Electroválvula Llenado]
+    StopConveyor -->|I1 NO| TimerStart[Iniciar Temporizador T1 / 7 segundos]
+    
+    Filling -->|I2 NO / Botella Llena| StopFilling[Detener Q3 / Fin Llenado]
+    StopFilling -->|I2 NO + T1 NC / Dentro del límite de tiempo| Capping[Activar Q2 / Herramienta Secundaria]
+    
+    Latch -->|M1 = 0 / Inactivo| Standby[Activar Q4 / Piloto de Standby/Parada]
 ```
 
-### Explicación de cada línea del programa Ladder:
-1. **Línea 1 (Inicio de Proceso):** Al pulsar `I1` (Marcha `S1`), se energiza el temporizador **T4**. Este temporizador funciona como un mantenedor temporal de ciclo (latch monoestable) que define la duración máxima del proceso.
-2. **Línea 2 (Control de Compuerta de Tolva A):** La salida `Q1` (Cilindro A) se activa si se cumplen tres condiciones simultáneamente:
-   * El temporizador **T4** está activo (contacto `T4` cerrado).
-   * Hay una botella detectada por el sensor `B` (contacto de entrada `I5` cerrado).
-   * El contador de lotes **C1** no ha llegado a su límite de 5 ciclos (contacto normalmente cerrado `C1` cerrado).
-3. **Línea 3 (Control de Pistón Dosificador B):** Al extenderse el Cilindro A y activarse `I2` (contacto del relé `-a1`), se activa la salida `Q2` para extender el **Cilindro B** (inyectar producto). Esto asegura una secuencia física lógica: no se puede dosificar si la compuerta de llenado no se ha abierto completamente.
-4. **Línea 4 (Retardo de Descarga):** Cuando el Cilindro B se extiende completamente y activa `I3` (relé `-b1`), se inicia el temporizador **T3** (3.0s), siempre y cuando el Cilindro C no esté extendido (contacto normalmente cerrado `I4` cerrado).
-5. **Línea 5 (Control de Compuerta de Salida C):** Al transcurrir el tiempo de **T3**, se cierra el contacto y se activa `Q3` (Cilindro C) para abrir la compuerta de descarga inferior.
-6. **Línea 6 (Reset del Lote):** Al pulsar `I6` (Pulsador verde `S6`), se envía un pulso a la entrada `R` (Reset) del contador **C1** para ponerlo a cero e iniciar un nuevo lote de 5 botellas.
-7. **Línea 7 (Conteo de Ciclos y Auto-Retorno de C):** Al activarse la salida `Q3` (Cilindro C en descarga), se envía un pulso a la entrada de conteo del bloque contador **C1**. Al mismo tiempo, en cuanto el Cilindro C llega a su extensión completa y activa `I4` (`-c1`), se abre el contacto NC de `I4` de la Línea 4. Esto desenergiza a `T3`, abriendo el contacto de la Línea 5 y haciendo que el Cilindro C se retraiga de forma automática e inmediata.
-8. **Línea 8 (Alarma de Falta de Envase):** Si no hay botella en la zona de dosificación, el contacto normalmente cerrado **`I5`** permanece cerrado, lo que activa la salida **`Q4`** y enciende la lámpara de alarma **`H`** para avisar al operador.
+### Explicación Detallada de cada Línea (Rung)
 
-![Esquema Ladder en LOGO!](Images/logica_ladder.png)
+* **Rung 1 (Circuito de Marcha y Parada - Lazo de Retención `M1`):**
+  * **Estructura:** `I3` (Contacto NC de Parada) en serie con el bloque en paralelo de `I4` (Pulsador de Marcha) y `M1` (Contacto de Autorretención), conectados en serie con `T1` (Contacto NC del Temporizador). Todos gobiernan la bobina interna **`M1`**.
+  * **Funcionamiento:** Al presionar el pulsador de marcha (`I4`), se activa la marca de memoria `M1` (Ciclo en Marcha) y queda retenida. La retención se interrumpe inmediatamente si se pulsa el botón de parada (`I3`) o si el temporizador de ciclo `T1` finaliza su conteo y abre su contacto NC.
 
----
+* **Rung 2 (Control del Motor de la Cinta Transportadora `Q1`):**
+  * **Estructura:** Contacto NO de `M1` en serie con el contacto NC de `I1` (Sensor de Botella) hacia la bobina de salida **`Q1`**.
+  * **Funcionamiento:** Con el sistema activo (`M1` encendido), el motor de la cinta (`Q1`) se activará y moverá las botellas siempre y cuando **no haya ninguna botella** posicionada frente al sensor de llenado (`I1` inactivo). En cuanto una botella interrumpe al sensor, `I1` se abre, deteniendo el motor instantáneamente.
 
-## 4. Circuito Neumático de Potencia
+* **Rung 3 (Control de la Electroválvula de Llenado `Q3`):**
+  * **Estructura:** Contacto NO de `M1` en serie con el contacto NO de `I1` (Botella presente) y el contacto NC de `I2` (Sensor de Llenado / Nivel) hacia la bobina de salida **`Q3`**.
+  * **Funcionamiento:** Si el ciclo está activo y hay una botella posicionada frente al dosificador (`I1` activo), la válvula de llenado (`Q3`) se abrirá siempre que la botella **no esté llena** (`I2` inactivo). En cuanto el líquido alcanza el sensor de nivel superior, `I2` se abre y corta el llenado.
 
-El sistema de fuerza neumática consta de 3 secciones idénticas:
-* **Cilindros:** 3 Actuadores de doble efecto (**A**, **B**, **C**).
-* **Control de velocidad:** Cada cilindro tiene dos **válvulas reguladoras de flujo unidireccionales reguladas al 50%**, lo que garantiza movimientos suaves y controlados para evitar derrames de producto.
-* **Válvulas Distribuidoras:** Cada cilindro es gobernado por una **válvula 5/2 monoestable con retorno por muelle** activada por solenoide (`Y1`, `Y2`, `Y3`). Al desactivarse la salida del PLC, el muelle regresa automáticamente la válvula a su estado de reposo, retrayendo el cilindro de forma segura.
+* **Rung 4 (Temporizador de Seguridad del Ciclo `T1`):**
+  * **Estructura:** Contacto NO de `M1` en serie con el contacto NO de `I1` (Botella presente) que activa la entrada del temporizador **`T1`** (configurado a 7.0 segundos).
+  * **Funcionamiento:** El conteo del temporizador general se inicia en el momento exacto en que una botella arriba a la zona de llenado. Su función es limitar la duración total del proceso en esa estación antes de reiniciar la secuencia.
 
-![Actuadores Neumáticos de Potencia](Images/actuadores_neumaticos.png)
+* **Rung 5 (Control de la Herramienta / Capping `Q2`):**
+  * **Estructura:** Contacto NO de `M1` en serie con el contacto NO de `I2` (Botella Llena) en serie con el contacto NC del temporizador `T1` hacia la bobina de salida **`Q2`**.
+  * **Funcionamiento:** Cuando la botella se llena y activa el sensor `I2`, se da inicio a la operación de la herramienta secundaria o taponadora (`Q2`). Esta permanecerá activa hasta que expire el tiempo de seguridad del temporizador `T1`.
 
----
-
-## 5. Diagrama de Casos de Uso (Visualización General)
-
-```mermaid
-flowchart LR
-    %% Actors
-    Operario["🧑‍🔧 Operario"]
-    PLC["🧠 PLC LOGO!"]
-    Actuadores["🦾 Cilindros Neumáticos"]
-    SensorBotella["🍾 Sensor Proximidad B"]
-    
-    subgraph Sistema ["Sistema Dosificador (3 Cilindros)"]
-        UC1(["Iniciar Ciclo (S1)"])
-        UC2(["Verificar Presencia Botella (B)"])
-        UC3(["Controlar Compuerta Entrada (Cilindro A)"])
-        UC4(["Dosificar Producto (Cilindro B)"])
-        UC5(["Descargar Producto (Cilindro C)"])
-        UC6(["Contar Lote y Bloquear al llegar a 5"])
-        UC7(["Reiniciar Contador (S6)"])
-        UC8(["Activar Alarma de Falta de Envase (H)"])
-    end
-    
-    %% Relationships
-    Operario --> UC1
-    Operario --> UC7
-    SensorBotella --> UC2
-    
-    UC1 -.->|requiere| UC2
-    UC2 -.->|permite| UC3
-    UC2 -.->|si no hay, activa| UC8
-    UC3 --> Actuadores
-    UC4 --> Actuadores
-    UC5 --> Actuadores
-    
-    PLC --> UC3
-    PLC --> UC4
-    PLC --> UC5
-    PLC --> UC6
-    PLC --> UC8
-```
+* **Rung 6 (Luz Piloto de Standby/Parada `Q4`):**
+  * **Estructura:** Contacto NC de `M1` hacia la bobina de salida **`Q4`**.
+  * **Funcionamiento:** Si la máquina no está en ciclo (M1 apagado), la salida `Q4` se energiza de forma continua para iluminar el indicador luminoso de Standby.
 
 ---
 
-## 🖥️ 6. Guía de Integración y Mapeo con PC SIMU
+## 3. Disposición de Objetos en PC SIMU
 
-Para que los componentes visuales de PC SIMU interactúen dinámicamente con la lógica eléctrica y neumática de CADe SIMU, se configuran las **Tablas de Intercambio de Entradas y Salidas**.
-
-### A. Tabla de Entradas en CADe SIMU (Lectura desde PC SIMU)
-Coloca el bloque de **Tabla de Entradas** en CADe SIMU y rellénalo con las siguientes direcciones físicas de entrada:
-
-| Dirección en PC SIMU | Nombre en la Tabla | Elemento Físico en PC SIMU |
-| :--- | :--- | :--- |
-| **I0.1** | `S1` | Botón Azul de Marcha (Pulsador NA). |
-| **I0.2** | `S2` | Captador/Detector `-a1` (Extensión del Cilindro A). |
-| **I0.3** | `S3` | Captador/Detector `-b1` (Extensión del Cilindro B). |
-| **I0.4** | `S4` | Captador/Detector `-c1` (Extensión del Cilindro C). |
-| **I0.5** | `S5` | Sensor de Presencia de Botella `B` (Detector inductivo o fotoeléctrico). |
-| **I0.6** | `S6` | Botón Verde de Reset de Lote (Pulsador NA). |
-
-### B. Tabla de Salidas en CADe SIMU (Escritura hacia PC SIMU)
-Coloca el bloque de **Tabla de Salidas** en CADe SIMU y rellénalo con las siguientes direcciones de salida para controlar los actuadores y luces en PC SIMU:
-
-| Dirección en PC SIMU | Nombre en la Tabla | Actuador en PC SIMU |
-| :--- | :--- | :--- |
-| **Q0.1** | `Y1` | Solenoide de expansión del **Cilindro A** (Compuerta de Entrada). |
-| **Q0.2** | `Y2` | Solenoide de expansión del **Cilindro B** (Pistón Dosificador). |
-| **Q0.3** | `Y3` | Solenoide de expansión del **Cilindro C** (Compuerta de Salida). |
-| **Q0.4** | `H` | Luz de Alerta / Lámpara indicadora de falta de envase. |
+El entorno físico contiene los siguientes elementos gráficos, ordenados de izquierda a derecha en la planta:
+* **Depósito de Líquido Principal:** Suministra el producto a través de una tubería.
+* **Válvulas Solenoides:** Controlan el flujo de líquido en las tuberías.
+* **Herramienta Dosificadora (Dispenser):** Representa la boquilla de llenado suspendida sobre la faja.
+* **Faja/Cinta Transportadora:** Mueve las botellas de izquierda a derecha.
+* **Sensores Ópticos / Fotoceldas:**
+  * **Detector de Posición (Botella):** Detecta la llegada de la botella a la zona de dosificación.
+  * **Detector de Nivel de Líquido:** Detecta cuándo la botella está llena.
+* **Panel de Control:** Contiene el Pulsador de Marcha (Verde/Azul) y el Pulsador de Parada (Rojo).
 
 ---
 
-## 🚦 7. Configuración de los Objetos en PC SIMU
+## 4. Alineación de Variables y Simulación Sincronizada
 
-Al diseñar el entorno en PC SIMU, haz doble clic sobre cada elemento y asígnale las direcciones descritas para asegurar el correcto acoplamiento:
+> [!NOTE]
+> Para mantener la documentación organizada y evitar duplicidad de información técnica básica, el análisis detallado del mapeo de entradas/salidas por defecto (desalineación de direcciones entre CADe SIMU y PC SIMU), las guías de corrección paso a paso y las instrucciones detalladas de simulación sincronizada se encuentran consolidados en la guía de conceptos y preparativos:
+>
+> 📂 **Consulta la guía de referencia:** [Previos.md](file:///d:/Work/Simu/Previos.md#L91-L188) (Sección 5: *Mapeo de Direcciones por Defecto y Desalineación de E/S*, Sección 6: *Guía de Corrección* y Sección 7: *Instrucciones para Ejecutar la Simulación*).
 
-### 1. Los Cilindros Neumáticos (A, B y C)
-* **Cilindro A (Compuerta de Tolva):**
-  * Salida de expansión: `Q0.1` (Controles electroválvula `Y1`).
-  * Captador Contraído: Deja libre (o asígnale una dirección si usas `-a0`).
-  * Captador Expandido: `I0.2` (Representa el sensor `-a1`).
-* **Cilindro B (Émbolo Dosificador):**
-  * Salida de expansión: `Q0.2` (Controles electroválvula `Y2`).
-  * Captador Expandido: `I0.3` (Representa el sensor `-b1`).
-* **Cilindro C (Válvula de Descarga):**
-  * Salida de expansión: `Q0.3` (Controles electroválvula `Y3`).
-  * Captador Expandido: `I0.4` (Representa el sensor `-c1`).
-
-### 2. El Sensor de Presencia de Botellas (B)
-* Elige un sensor **fotoeléctrico de barrera** u **óptico**.
-* Asígnale la dirección **`I0.5`**. Ubícalo justo debajo de la boquilla de caída del producto, de modo que la botella active el sensor al detenerse allí.
-
-### 3. Los Pulsadores y Luces
-* **Botón Azul de Llenado (`S1`):** Asigna la dirección de entrada **`I0.1`**.
-* **Botón Verde de Reset (`S6`):** Asigna la dirección de entrada **`I0.6`**.
-* **Piloto Luminoso (`H`):** Asigna la dirección de salida **`Q0.4`**.
-
----
-
-## 🔄 8. Paso a Paso para Iniciar la Simulación Conjunta
-
-Para evitar errores de sincronización y asegurar que los puertos se abran correctamente, sigue siempre este orden:
-
-1. **Paso 1:** Abre los dos programas (CADe SIMU y PC SIMU) en tu computadora.
-2. **Paso 2:** En **CADe SIMU**, pulsa el botón verde de **Play** (Simulación). El programa quedará en espera de comunicación.
-3. **Paso 3:** En **PC SIMU**, pulsa el icono de la computadora con la pantalla verde (modo simulación) y luego haz clic en el botón **Play**.
-4. **Paso 4 (Verificación):**
-   * Observa la luz de alarma `H` en PC SIMU. Como no hay ninguna botella bajo el sensor `B`, la lámpara `H` (`Q0.4`) debería encenderse inmediatamente.
-   * Coloca o desplaza una botella en la faja de PC SIMU hasta que quede frente al sensor `B`. La alarma `H` se apagará.
-   * Presiona el botón azul `S1` en PC SIMU y observa cómo se inicia la secuencia de los cilindros neumática y eléctricamente en ambos softwares al mismo tiempo.
+A grandes rasgos, recuerda verificar que:
+1. El sensor de posición de botella y el detector de nivel compartan la misma dirección lógica en la tabla de intercambio de CADe SIMU y en el objeto correspondiente de PC SIMU.
+2. Los botones de Marcha/Parada y los actuadores (Cinta, Electroválvula de Llenado, Herramienta de Capping) tengan correspondencia directa de direccionamiento físico.
+3. Se inicie la simulación en CADe SIMU (Play) **antes** de iniciarla en PC SIMU (computadora de pantalla verde y Play).
